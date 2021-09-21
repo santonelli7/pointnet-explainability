@@ -1,0 +1,29 @@
+{
+    "gpu": 1,
+
+    "pointnet_ckpt": "pointnet.ckpt",
+    "aae_ckpt": "aae.ckpt",
+    "aae_config": "aae_hyperparams.json",
+
+    "dataset": "modelnet",
+    "data_dir": "data",
+    "expected_class": "monitor",
+    "num_points": 2048,
+    "threshold": 0.002,
+
+    "ckpts_dir": "checkpoints",
+    "last_ckpt": null,
+    "run_id": null,
+    "project_name": "pointnet_explanation",
+    "max_epochs": 10000,
+
+    "seed": 7,
+
+    "optimizer": {
+        "type": "Adam",
+        "hyperparams": {
+            "lr": 1e-3,
+            "weight_decay": 5e-3
+        }
+    }
+}

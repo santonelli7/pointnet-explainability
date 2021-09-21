@@ -1,0 +1,67 @@
+{
+    "gpu": 1,
+
+    "reconstruction_loss": "chamfer",
+    "lambda_adv": 0.33,
+    "lambda_pts": 0.33,
+    "lambda_feat": 0.33,
+
+    "feature_transform": true,
+    "pointnet_run_id": "3v9cv2p5",
+    "pointnet_ckpt": "pointnet.ckpt",
+
+    "dataset": "modelnet",
+    "data_dir": "data",
+    "num_classes": 40,
+    "classes": [],
+    "transforms": [],
+    "num_workers": 8,
+    "num_points": 2048,
+
+    "ckpts_dir": "checkpoints",
+    "last_ckpt": "epoch=1948-step=343023.ckpt",
+    "run_id": "13jkoiuw",
+    "project_name": "3d_pointcloud_autoencoder",
+    "max_epochs": 2000,
+    "batch_size": 50,
+    "gp_lambda": 10,
+    "reconstruction_coef": 0.05,
+    "z_size": 1024,
+
+    "normal_mu": 0.0,
+    "normal_std": 0.2,
+
+    "seed": 7,
+
+    "model": {
+        "D": {
+            "dropout": 0.5,
+            "use_bias": true,
+            "relu_slope": 0.2
+        },
+        "G": {
+            "use_bias": true,
+            "relu_slope": 0.2
+        }
+    },
+    "optimizer": {
+        "D": {
+            "type": "Adam",
+            "hyperparams": {
+                "lr": 0.0005,
+                "weight_decay": 0,
+                "betas": [0.9, 0.999],
+                "amsgrad": false
+            }
+        },
+        "EG": {
+            "type": "Adam",
+            "hyperparams": {
+                "lr": 0.0005,
+                "weight_decay": 0,
+                "betas": [0.9, 0.999],
+                "amsgrad": false
+            }
+        }
+    }
+}

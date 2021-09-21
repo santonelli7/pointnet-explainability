@@ -1,0 +1,40 @@
+{
+    "gpu": 1,
+
+
+    "dataset": "modelnet",
+    "data_dir": "data",
+    "feature_transform": true,
+    "num_classes": 40,
+    "classes": [],
+    "transforms": [],
+    "num_workers": 8,
+    "num_points": 2048,
+
+    "ckpts_dir": "checkpoints",
+    "last_ckpt": "epoch=199-step=55199.ckpt",
+    "run_id": "3v9cv2p5",
+    "project_name": "pointnet_classification",
+    "max_epochs": 200,
+    "batch_size": 32,
+
+    "seed": 7,
+
+    "optimizer": {
+        "type": "Adam",
+        "hyperparams": {
+            "lr": 0.0005,
+            "weight_decay": 0,
+            "betas": [0.9, 0.999],
+            "eps": 1e-8,
+            "amsgrad": false
+        }
+    },
+    "scheduler": {
+        "type": "StepLR",
+        "hyperparams": {
+            "step_size": 20,
+            "gamma": 0.7
+        }
+    }
+}
