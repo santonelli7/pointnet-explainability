@@ -19,11 +19,11 @@ class WandbCallback(pl.Callback):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        if torch.cuda.is_available():
-            self.fixed_noise = torch.cuda.FloatTensor(self.config['num_classes'], self.config['z_size'], 1)
-        else:
-            self.fixed_noise = torch.FloatTensor(self.config['num_classes'], self.config['z_size'], 1)
-        self.fixed_noise.normal_(mean=self.config['normal_mu'], std=self.config['normal_std'])
+        # if torch.cuda.is_available():
+        #     self.fixed_noise = torch.cuda.FloatTensor(self.config['num_classes'], self.config['z_size'], 1)
+        # else:
+        #     self.fixed_noise = torch.FloatTensor(self.config['num_classes'], self.config['z_size'], 1)
+        # self.fixed_noise.normal_(mean=self.config['normal_mu'], std=self.config['normal_std'])
 
     def on_epoch_end(self, trainer, pl_module):
         samples = trainer.datamodule.test_samples

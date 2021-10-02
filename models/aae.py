@@ -149,15 +149,17 @@ class AAE(pl.LightningModule):
         self.comparator_loss = nn.MSELoss(reduction='mean')
 
         # FAKE TENSOR FOR DISCRIMINATOR TRAINING
-        if torch.cuda.is_available():
-            self.noise = torch.cuda.FloatTensor(config['batch_size'], config['z_size'])
-        else:
-            self.noise = torch.FloatTensor(config['batch_size'], config['z_size'])
+        # if torch.cuda.is_available():
+        #     self.noise = torch.cuda.FloatTensor(config['batch_size'], config['z_size'])
+        # else:
+        #     self.noise = torch.FloatTensor(config['batch_size'], config['z_size'])
 
         self.save_hyperparameters(config)
-        self._models_sanity_check()
 
-    def _models_sanity_check(self):
+    def _models_sanity_check(self, optimizer_idx):
+        assert (not self.comparator.training and not self.encoder.training), "Both comparator and encoder need to be in evaluation mode"
+        assert (self.generator.training and self.discriminator.training), "Both generator and discriminator need to be in training mode"
+
         # Comparator must be freezed
         for param in self.comparator.parameters():
             assert not param.requires_grad, "The comparator model must be frozen"
@@ -166,13 +168,24 @@ class AAE(pl.LightningModule):
         for param in self.encoder.parameters():
             assert not param.requires_grad, "The encoder model must be frozen"
 
-        # Generator requires gradients
-        for param in self.generator.parameters():
-            assert param.requires_grad, "The generator model requires gradients, do not freeze it"
+        # Train generator
+        if optimizer_idx == 0:
+            # Generator requires gradients
+            for param in self.generator.parameters():
+                assert param.requires_grad, "The generator model requires gradients, do not freeze it"
 
-        # Discriminator requires gradients
-        for param in self.discriminator.parameters():
-            assert param.requires_grad, "The discriminator model requires gradients, do not freeze it"
+            # Discriminator does not require gradients
+            for param in self.discriminator.parameters():
+                assert not param.requires_grad, "The discriminator model does not require gradients while training the generator"
+        
+        # Train discriminator
+        elif optimizer_idx == 1:
+            # Discriminator requires gradients
+            for param in self.discriminator.parameters():
+                assert param.requires_grad, "The discriminator model requires gradients, do not freeze it"
+            # Generator does not require gradients
+            for param in self.generator.parameters():
+                assert not param.requires_grad, "The generator model does not require gradients while training the discriminator"
 
     def forward(self, z):
         return self.generator(z)
@@ -199,20 +212,23 @@ class AAE(pl.LightningModule):
         return gradient_penalty
 
     def configure_optimizers(self):
-        EG_optim = getattr(torch.optim, self.config['optimizer']['EG']['type'])
-        EG_optim = EG_optim(chain(self.encoder.parameters(), self.generator.parameters()),
-                        **self.config['optimizer']['EG']['hyperparams'])
+        EGC_optim = getattr(torch.optim, self.config['optimizer']['EGC']['type'])
+        EGC_optim = EGC_optim(chain(self.encoder.parameters(), self.comparator.parameters(), self.generator.parameters()),
+                        **self.config['optimizer']['EGC']['hyperparams'])
 
         D_optim = getattr(torch.optim, self.config['optimizer']['D']['type'])
         D_optim = D_optim(self.discriminator.parameters(),
                       **self.config['optimizer']['D']['hyperparams'])
         
         return (
-            {'optimizer': EG_optim, 'frequency': 1},
-            {'optimizer': D_optim, 'frequency': 1}
+            {'optimizer': EGC_optim, 'frequency': self.config['optimizer']['EGC']['frequency']},
+            {'optimizer': D_optim, 'frequency': self.config['optimizer']['D']['frequency']}
         )
 
     def training_step(self, batch, batch_idx, optimizer_idx):
+        self.encoder.eval()
+        self.comparator.eval()
+        self._models_sanity_check(optimizer_idx)
         X, _ = batch
 
         # Change dim [BATCH, N_POINTS, N_DIM] -> [BATCH, N_DIM, N_POINTS]
@@ -220,10 +236,12 @@ class AAE(pl.LightningModule):
             X.transpose_(X.dim() - 2, X.dim() - 1)
 
         codes, _, _ = self.encoder(X)
+        assert not codes.requires_grad
 
         # train generator
         if optimizer_idx == 0:
             X_rec = self(codes)
+            assert X_rec.requires_grad
 
             # points space loss
             pts_loss = torch.mean(
@@ -233,26 +251,31 @@ class AAE(pl.LightningModule):
 
             # adversarial loss
             synth_logit = self.discriminator(X_rec)
+            assert synth_logit.requires_grad
             adv_loss = -torch.mean(synth_logit)
 
             # features space loss
-            # pre_logits_rec = self.comparator(X_rec)
-            # pre_logits_X = self.comparator(X)
-            # feat_loss = self.comparator_loss(pre_logits_rec, pre_logits_X)
+            pre_logits_rec = self.comparator(X_rec)
+            assert pre_logits_rec.requires_grad
+            pre_logits_X = self.comparator(X)
+            assert not pre_logits_X.requires_grad
+            feat_loss = self.comparator_loss(pre_logits_rec, pre_logits_X)
 
             # generator loss
-            eg_loss = pts_loss + adv_loss 
+            eg_loss = pts_loss + adv_loss + feat_loss
 
-            metrics = {'eg_loss': eg_loss, 'adv_loss': adv_loss, 'pts_loss': pts_loss}
+            metrics = {'eg_loss': eg_loss, 'adv_loss': adv_loss, 'pts_loss': pts_loss, 'feat_loss': feat_loss}
             self.log_dict(metrics, on_step=True, on_epoch=True, prog_bar=True, logger=True)
             return eg_loss
 
         # train discriminator
         elif optimizer_idx == 1:
             X_fake = self(codes)
-            self.noise.normal_(mean=self.config['normal_mu'], std=self.config['normal_std'])
+            assert not X_fake.requires_grad
             synth_logit = self.discriminator(X_fake)
+            assert synth_logit.requires_grad
             real_logit = self.discriminator(X)
+            assert real_logit.requires_grad
 
             gradient_penalty = self.compute_gradient_penalty(X.data, X_fake.data)
             d_loss = torch.mean(synth_logit) - torch.mean(real_logit) + self.config['gp_lambda'] * gradient_penalty

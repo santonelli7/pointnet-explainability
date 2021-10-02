@@ -7,7 +7,6 @@
     "lambda_feat": 0.33,
 
     "feature_transform": true,
-    "pointnet_run_id": "3v9cv2p5",
     "pointnet_ckpt": "pointnet.ckpt",
 
     "dataset": "modelnet",
@@ -19,8 +18,8 @@
     "num_points": 2048,
 
     "ckpts_dir": "checkpoints",
-    "last_ckpt": "epoch=1948-step=343023.ckpt",
-    "run_id": "13jkoiuw",
+    "last_ckpt": "epoch=1980-step=348655.ckpt",
+    "run_id": "p0rfdmu5",
     "project_name": "3d_pointcloud_autoencoder",
     "max_epochs": 2000,
     "batch_size": 50,
@@ -52,16 +51,18 @@
                 "weight_decay": 0,
                 "betas": [0.9, 0.999],
                 "amsgrad": false
-            }
+            },
+            "frequency": 1
         },
-        "EG": {
+        "EGC": {
             "type": "Adam",
             "hyperparams": {
                 "lr": 0.0005,
                 "weight_decay": 0,
                 "betas": [0.9, 0.999],
                 "amsgrad": false
-            }
+            },
+            "frequency": 1
         }
     }
 }

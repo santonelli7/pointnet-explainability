@@ -1,0 +1,4 @@
+h5py
+torch
+pytorch-lightning
+wandb

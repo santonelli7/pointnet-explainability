@@ -72,12 +72,12 @@ class LitDataModule(pl.LightningDataModule):
             test_dataset = dataset(root_dir=self.data_dir, split='test')
             points_test = []
             cls_test = []
-            gt_cls = 0
-            for points, cls in test_dataset:
-                if cls == gt_cls:
-                    points_test.append(points.numpy())
-                    cls_test.append(cls.numpy())
-                    gt_cls += 1
+            for gt_cls in range(self.config['num_classes']):
+                for points, cls in test_dataset:
+                    if cls == gt_cls:
+                        points_test.append(points.numpy())
+                        cls_test.append(cls.numpy())
+                        break
 
             dataset = torch.utils.data.TensorDataset(torch.FloatTensor(points_test), torch.LongTensor(cls_test))
             self.test_samples = next(iter(torch.utils.data.DataLoader(dataset, batch_size=len(dataset))))
