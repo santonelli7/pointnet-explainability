@@ -79,7 +79,21 @@ class Discriminator(nn.Module):
             nn.Linear(512, 256, bias=True),
             nn.ReLU(inplace=True),
 
-            nn.Linear(256, 1, bias=True)
+            nn.Linear(256, 2048, bias=True),
+
+            nn.Linear(2048, 512, bias=True),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(512, 512, bias=True),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(512, 128, bias=True),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(128, 64, bias=True),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(64, 1, bias=True)
         )
 
     def forward(self, x):

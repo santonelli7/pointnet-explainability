@@ -3,39 +3,33 @@ import argparse
 from os.path import join
 from tqdm import tqdm
 
-from models.pointnet import PointNet
 from models.aae import AAE
 
 import wandb
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pytorch_lightning as pl
 
-def models_sanity_check(random_noise_input, gt_class, pointnet, encoder, generator):
-    assert not gt_class.requires_grad, "Ground truth does not require gradients"
-    assert random_noise_input.requires_grad, "Input does require gradients"
+def models_sanity_check(code, ground_truth, encoder, pointnet, generator):
+    assert not ground_truth.requires_grad, "Ground truth does not require gradients"
+    assert code.requires_grad, "Input does require gradients"
 
-    assert (not pointnet.training and not encoder.training and not generator.training), "The models need to be in evaluation mode"
+    assert (not encoder.training and not pointnet.training and not generator.training), "The models need to be in evaluation mode"
+
+    # Encoder must be freezed
+    for param in encoder.parameters():
+        assert not param.requires_grad, "The comparator model must be frozen"
 
     # PointNet must be freezed
     for param in pointnet.parameters():
         assert not param.requires_grad, "The comparator model must be frozen"
 
-    # Encoder must be freezed
-    for param in encoder.parameters():
-        assert not param.requires_grad, "The encoder model must be frozen"
-
     # Generator must be freezed
     for param in generator.parameters():
         assert not param.requires_grad, "The generator model must be frozen"
     
-def get_class_distribution(classes, log_probs):
-    values = torch.exp(log_probs.squeeze()).tolist()
-    data = [[label, val] for (label, val) in zip(classes, values)]
-    table = wandb.Table(data=data, columns = ["class", "probability"])
-    return table
-
-def optimization_loop(config, pointnet, encoder, generator, kl_div, optimizer, points, ground_truth):
+def get_class_distribution(config, logits):
     dataset_name = config['dataset'].lower()
     if dataset_name == 'shapenet':
         from datasets.shapenet import ShapeNetDataset as ShapeNet
@@ -45,65 +39,69 @@ def optimization_loop(config, pointnet, encoder, generator, kl_div, optimizer, p
         classes = ModelNet.all_classes
     else:
         raise ValueError(f'Invalid dataset name. Expected `shapenet` or 'f'`modelnet`. Got: `{dataset_name}`')
-    
+
+    probs = F.softmax(logits, dim=1)
+    values = probs.squeeze().tolist()
+    data = [[label, val] for (label, val) in zip(classes, values)]
+    table = wandb.Table(data=data, columns = ["class", "probability"])
+    return table
+
+def optimization_loop(config, encoder, pointnet, generator, kl_div, optimizer, code, ground_truth):
+
     # Optimization loop
-    encoder.eval()    
+    # encoder.eval()
     generator.eval()
     pointnet.eval()
-    models_sanity_check(points, ground_truth, pointnet, encoder, generator)
+    models_sanity_check(code=code, ground_truth=ground_truth, encoder=encoder, pointnet=pointnet, generator=generator)
 
-    progress_bar = tqdm(range(1), desc='Optimizing')
+    progress_bar = tqdm(range(1), desc='Optimizing', bar_format='{desc} [{elapsed}, {postfix}]')
     it = 0
     convergence = 1
     while convergence > config["threshold"]:
         optimizer.zero_grad()
         
-        code, _, _ = encoder(points)
         gen_points = generator(code)
-        log_probs, _, _ = pointnet(gen_points)
+        logits = pointnet(gen_points)
 
-        assert log_probs.shape == ground_truth.shape
+        assert gen_points.max() < 1.5 and gen_points.min() > -1.5
+        log_probs = F.log_softmax(logits, dim=1)
         loss = kl_div(log_probs, ground_truth)
         loss.backward()
         optimizer.step()
+
         convergence = loss.item()
         progress_bar.set_postfix({'loss': convergence, 'iteration': it})
-
         wandb.log({'loss': convergence,
                    'iteration': it,
-                }),
-        wandb.log({'pointcloud': wandb.Object3D(points.detach().cpu().squeeze().transpose(0,1).numpy())})
-        wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().transpose(0,1).numpy())})
-        # if it % 1000 == 0:
-        table = get_class_distribution(classes, log_probs.detach())
-        wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
-
+                })
+        
         it += 1
 
-    # table = get_class_distribution(classes, log_probs.detach())
-    # wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
+        if it % 20000 == 0:
+            wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().numpy().transpose())})
+            
+            table = get_class_distribution(config, logits.detach())
+            wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
+
+    wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().numpy().transpose())})
+    
+    table = get_class_distribution(config, logits.detach())
+    wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
 
 def main(config):
     pl.seed_everything(config['seed'])
 
     # MODELS
-    pointnet = PointNet.load_from_checkpoint(join(config['ckpts_dir'], config['pointnet_ckpt']), map_location=config["device"])
-    pointnet = pointnet.to(config["device"])
-    pointnet.freeze()
-
     with open(join("settings", config["aae_config"])) as f:
         aae_config = json.load(f)
     aae = AAE.load_from_checkpoint(join(config['ckpts_dir'], config['aae_ckpt']), config=aae_config, map_location=config["device"])
-    aae = aae.to(config["device"])
     aae.freeze()
-    encoder = aae.encoder
-    generator = aae.generator
+    encoder = aae.encoder.to(config['device'])
+    generator = aae.generator.to(config["device"])
+    comparator = aae.comparator.to(config["device"])
 
     # LOSS
     kl_div = nn.KLDivLoss(reduction='batchmean')
-
-    # INPUT
-    random_noise_points = torch.randn((1, 3, config["num_points"]), device=config["device"], requires_grad=True)
 
     # GROUND TRUTH
     dataset_name = config['dataset'].lower()
@@ -120,14 +118,27 @@ def main(config):
 
     gt_class = (torch.Tensor(classes_idx) == cls_idx).unsqueeze(dim=0).float().to(config["device"])
 
+    # INPUT
+    encoder.eval()
+    dataset = ModelNet(root_dir=join('data', 'modelnet'), split="test")
+    for data in dataset:
+        if data[1].item() == 2:
+            points = data[0].transpose(0,1).unsqueeze(0).to(config['device'])
+            gt_idx = data[1]
+            break
+
+    # assert cls_idx != gt_idx
+    code, _, _ = encoder(points)
+    # code = torch.rand( 1, config["z_size"] ).to(config["device"])
+
     # OPTIMIZER
     optim = getattr(torch.optim, config['optimizer']['type'])
-    optim = optim([random_noise_points], 
+    optim = optim([code.requires_grad_()], 
         **config['optimizer']['hyperparams'])
 
     wandb.init(id=config["run_id"], project=config["project_name"], config=config, resume="allow")
 
-    optimization_loop(config, pointnet, encoder, generator, kl_div, optim, random_noise_points, gt_class)
+    optimization_loop(config=config, encoder=encoder, pointnet=comparator, generator=generator, kl_div=kl_div, optimizer=optim, code=code, ground_truth=gt_class)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

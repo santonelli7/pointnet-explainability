@@ -18,8 +18,8 @@
     "num_points": 2048,
 
     "ckpts_dir": "checkpoints",
-    "last_ckpt": "epoch=1980-step=348655.ckpt",
-    "run_id": "p0rfdmu5",
+    "last_ckpt": "epoch=1932-step=340207.ckpt",
+    "run_id": "14qvi8cq",
     "project_name": "3d_pointcloud_autoencoder",
     "max_epochs": 2000,
     "batch_size": 50,

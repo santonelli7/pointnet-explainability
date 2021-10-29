@@ -37,7 +37,7 @@ class WandbCallback(pl.Callback):
         codes, _, _ = pl_module.encoder(X)
         X_rec = pl_module(codes).data
 
-        for k in range(len(X)):
+        for k in range(X.size(0)):
 
             if self.config['dataset'].lower() == 'shapenet':
                 from datasets.shapenet import ShapeNetDataset as ShapeNet
