@@ -19,11 +19,6 @@ class WandbCallback(pl.Callback):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        # if torch.cuda.is_available():
-        #     self.fixed_noise = torch.cuda.FloatTensor(self.config['num_classes'], self.config['z_size'], 1)
-        # else:
-        #     self.fixed_noise = torch.FloatTensor(self.config['num_classes'], self.config['z_size'], 1)
-        # self.fixed_noise.normal_(mean=self.config['normal_mu'], std=self.config['normal_std'])
 
     def on_epoch_end(self, trainer, pl_module):
         samples = trainer.datamodule.test_samples
@@ -33,7 +28,6 @@ class WandbCallback(pl.Callback):
         if X.size(-1) == 3:
             X.transpose_(X.dim() - 2, X.dim() - 1)
 
-        # fake = pl_module(self.fixed_noise).data
         codes, _, _ = pl_module.encoder(X)
         X_rec = pl_module(codes).data
 
@@ -50,7 +44,6 @@ class WandbCallback(pl.Callback):
 
             if trainer.current_epoch == 0:
                 wandb.log({f'{cls}_real': wandb.Object3D(X[k].T.cpu().numpy())})
-            # wandb.log({f'{cls}_fixed': wandb.Object3D(fake[k].T.cpu().numpy())})
             wandb.log({f'{cls}_reconstructed': wandb.Object3D(X_rec[k].T.cpu().numpy())})
 
 def main(config):

@@ -27,9 +27,6 @@
     "reconstruction_coef": 0.05,
     "z_size": 1024,
 
-    "normal_mu": 0.0,
-    "normal_std": 0.2,
-
     "seed": 7,
 
     "model": {

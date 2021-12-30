@@ -162,12 +162,6 @@ class AAE(pl.LightningModule):
                              f'`earth_mover`, got: {config["reconstruction_loss"]}')
         self.comparator_loss = nn.MSELoss(reduction='mean')
 
-        # FAKE TENSOR FOR DISCRIMINATOR TRAINING
-        # if torch.cuda.is_available():
-        #     self.noise = torch.cuda.FloatTensor(config['batch_size'], config['z_size'])
-        # else:
-        #     self.noise = torch.FloatTensor(config['batch_size'], config['z_size'])
-
         self.save_hyperparameters(config)
 
     def _models_sanity_check(self, optimizer_idx):
