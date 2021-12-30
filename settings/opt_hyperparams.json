@@ -6,24 +6,18 @@
 
     "dataset": "modelnet",
     "data_dir": "data",
-    "expected_class": "airplane",
+    "expected_class": "bookshelf",
     "num_points": 2048,
     "z_size": 1024,
-    "threshold": 0.002,
 
     "ckpts_dir": "checkpoints",
     "last_ckpt": null,
     "run_id": null,
     "project_name": "pointnet_explanation",
-    "max_epochs": 10000,
+    "max_iters": 100000,
 
     "seed": 7,
+    "lr": 1e-2,
+    "w_decay": 1e-3
 
-    "optimizer": {
-        "type": "Adam",
-        "hyperparams": {
-            "lr": 1e-3,
-            "weight_decay": 5e-3
-        }
-    }
 }

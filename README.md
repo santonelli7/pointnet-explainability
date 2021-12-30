@@ -1,5 +1,5 @@
 # PointNet Explanation
-Model-level technique to explain what PointNet learnt.
+Model-level technique to explain what PointNet, trained on 3D point cloud classification, has learned.
 
 ### Requirements
 `pip install -r requirements.txt`

@@ -7,19 +7,14 @@ from models.aae import AAE
 
 import wandb
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-def models_sanity_check(code, ground_truth, encoder, pointnet, generator):
+def models_sanity_check(code, ground_truth, pointnet, generator):
     assert not ground_truth.requires_grad, "Ground truth does not require gradients"
     assert code.requires_grad, "Input does require gradients"
 
-    assert (not encoder.training and not pointnet.training and not generator.training), "The models need to be in evaluation mode"
-
-    # Encoder must be freezed
-    for param in encoder.parameters():
-        assert not param.requires_grad, "The comparator model must be frozen"
+    assert (not pointnet.training and not generator.training), "The models need to be in evaluation mode"
 
     # PointNet must be freezed
     for param in pointnet.parameters():
@@ -43,49 +38,67 @@ def get_class_distribution(config, logits):
     probs = F.softmax(logits, dim=1)
     values = probs.squeeze().tolist()
     data = [[label, val] for (label, val) in zip(classes, values)]
-    table = wandb.Table(data=data, columns = ["class", "probability"])
-    return table
+    table = wandb.Table(data=data, columns=["class", "probability"])
+    return table, values
 
-def optimization_loop(config, encoder, pointnet, generator, kl_div, optimizer, code, ground_truth):
+def optimization_loop(config, pointnet, generator, code, ground_truth, cls_idx):
 
-    # Optimization loop
-    # encoder.eval()
+    code.requires_grad_()
     generator.eval()
     pointnet.eval()
-    models_sanity_check(code=code, ground_truth=ground_truth, encoder=encoder, pointnet=pointnet, generator=generator)
+    models_sanity_check(code=code, ground_truth=ground_truth, pointnet=pointnet, generator=generator)
 
+    # Optimization loop
     progress_bar = tqdm(range(1), desc='Optimizing', bar_format='{desc} [{elapsed}, {postfix}]')
     it = 0
-    convergence = 1
-    while convergence > config["threshold"]:
-        optimizer.zero_grad()
+    while it < config['max_iters']:
         
         gen_points = generator(code)
         logits = pointnet(gen_points)
+        activation = logits[0, cls_idx]
 
-        assert gen_points.max() < 1.5 and gen_points.min() > -1.5
-        log_probs = F.log_softmax(logits, dim=1)
-        loss = kl_div(log_probs, ground_truth)
+        # L1 regularizer to minimize to inject sparsity
+        loss = activation - config['w_decay'] * torch.norm(gen_points, p=1)
         loss.backward()
-        optimizer.step()
+    
+        # Gradient ascent
+        grad = code.grad.data
 
-        convergence = loss.item()
-        progress_bar.set_postfix({'loss': convergence, 'iteration': it})
-        wandb.log({'loss': convergence,
-                   'iteration': it,
-                })
+        # Normalize the gradients (make them have mean = 0 and std = 1)
+        g_std = torch.std(grad)
+        g_mean = torch.mean(grad)
+        smooth_grad = (grad - g_mean) / g_std
+
+        code.data += config['lr'] * smooth_grad
+
+        code.grad.data.zero_()
         
-        it += 1
-
-        if it % 20000 == 0:
+        # Logs
+        if it % 10000 == 0:
+            table, probs = get_class_distribution(config, logits.detach())
             wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().numpy().transpose())})
-            
-            table = get_class_distribution(config, logits.detach())
             wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
 
+        # table, probs = get_class_distribution(config, logits.detach())
+        # wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().numpy().transpose())})
+        # wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
+
+        prob = F.softmax(logits.detach(), dim=1)[0, cls_idx].item()
+
+        progress_bar.set_postfix({'loss': loss.item(),
+                                  'activation': activation.item(), 
+                                  'prob': prob,
+                                  'iteration': it,
+                                  })
+        wandb.log({'loss': loss.item(),
+                   'activation': activation.item(), 
+                   'iteration': it,
+                })
+            
+        it += 1
+
+    table, probs = get_class_distribution(config, logits.detach())
     wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().numpy().transpose())})
-    
-    table = get_class_distribution(config, logits.detach())
     wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
 
 def main(config):
@@ -96,12 +109,8 @@ def main(config):
         aae_config = json.load(f)
     aae = AAE.load_from_checkpoint(join(config['ckpts_dir'], config['aae_ckpt']), config=aae_config, map_location=config["device"])
     aae.freeze()
-    encoder = aae.encoder.to(config['device'])
     generator = aae.generator.to(config["device"])
     comparator = aae.comparator.to(config["device"])
-
-    # LOSS
-    kl_div = nn.KLDivLoss(reduction='batchmean')
 
     # GROUND TRUTH
     dataset_name = config['dataset'].lower()
@@ -118,39 +127,32 @@ def main(config):
 
     gt_class = (torch.Tensor(classes_idx) == cls_idx).unsqueeze(dim=0).float().to(config["device"])
 
-    # INPUT
-    encoder.eval()
-    dataset = ModelNet(root_dir=join('data', 'modelnet'), split="test")
-    for data in dataset:
-        if data[1].item() == 2:
-            points = data[0].transpose(0,1).unsqueeze(0).to(config['device'])
-            gt_idx = data[1]
-            break
-
-    # assert cls_idx != gt_idx
-    code, _, _ = encoder(points)
-    # code = torch.rand( 1, config["z_size"] ).to(config["device"])
-
-    # OPTIMIZER
-    optim = getattr(torch.optim, config['optimizer']['type'])
-    optim = optim([code.requires_grad_()], 
-        **config['optimizer']['hyperparams'])
+    # INPUT RANDOM NOISE
+    code = torch.FloatTensor(1, config["z_size"])
+    code = code.to(config["device"])
+    code.uniform_(0, 1)
 
     wandb.init(id=config["run_id"], project=config["project_name"], config=config, resume="allow")
 
-    optimization_loop(config=config, encoder=encoder, pointnet=comparator, generator=generator, kl_div=kl_div, optimizer=optim, code=code, ground_truth=gt_class)
+    wandb.run.name = config['expected_class']
+
+    optimization_loop(config=config, pointnet=comparator, generator=generator, code=code, ground_truth=gt_class, cls_idx=cls_idx)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', default=None, type=str,
                         help='config file path')
+    parser.add_argument('-C', '--cls', default='airplane', type=str, help='expected class')
     args = parser.parse_args()
+    expected_class = args.cls
 
     config = None
     if args.config is not None and args.config.endswith('.json'):
         with open(args.config) as f:
             config = json.load(f)
     assert config is not None
+
+    config['expected_class'] = expected_class
 
     config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
 
