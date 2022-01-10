@@ -12,8 +12,8 @@
     "num_points": 2048,
 
     "ckpts_dir": "checkpoints",
-    "last_ckpt": "epoch=199-step=55199.ckpt",
-    "run_id": "3v9cv2p5",
+    "last_ckpt": "epoch=145-step=40295.ckpt",
+    "run_id": "sju5xhw0",
     "project_name": "pointnet_classification",
     "max_epochs": 200,
     "batch_size": 32,

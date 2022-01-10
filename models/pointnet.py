@@ -160,6 +160,7 @@ class PointNet(pl.LightningModule):
         self.config = config
         self.model = PointNetCls(k=config['num_classes'], feature_transform=config['feature_transform'])
         self.train_accuracy = torchmetrics.Accuracy()
+        self.val_accuracy = torchmetrics.Accuracy()
         self.test_accuracy = torchmetrics.Accuracy()
         self.save_hyperparameters(config)
 
@@ -183,30 +184,34 @@ class PointNet(pl.LightningModule):
                 }
 
     def training_step(self, batch, batch_idx):
-        points, target = batch
-        target = target.squeeze()
-        points = points.transpose(2, 1)
+        points, target = self._dataprocess(batch)
         loss, pred = self._shared_step(points, target)
         acc = self.train_accuracy(pred, target)
         metrics = {'acc': acc, 'loss': loss}
         self.log_dict(metrics, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return metrics
 
-    # def validation_step(self, batch, batch_idx):
-    #     loss, acc = self._shared_step(batch, batch_idx)
-    #     metrics = {"val_acc": acc, "val_loss": loss}
-    #     self.log_dict(metrics, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-    #     return metrics
+    def validation_step(self, batch, batch_idx):
+        points, target = self._dataprocess(batch)
+        loss, pred = self._shared_step(points, target)
+        acc = self.val_accuracy(pred, target)
+        metrics = {'val_acc': acc, 'val_loss': loss}
+        self.log_dict(metrics, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return metrics
 
     def test_step(self, batch, batch_idx):
-        points, target = batch
-        target = target.squeeze()
-        points = points.transpose(2, 1)
+        points, target = self._dataprocess(batch)
         loss, pred = self._shared_step(points, target)
         acc = self.test_accuracy(pred, target)
         metrics = {"test_acc": acc, "test_loss": loss}
         self.log_dict(metrics, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return {'points': points, 'target': target, 'pred': pred.argmax(dim=-1)}
+
+    def _dataprocess(self, batch):
+        points, target = batch
+        target = target.squeeze()
+        points = points.transpose(2, 1)
+        return points, target
 
     def _shared_step(self, points, target):
         pred, _, trans_feat = self(points)

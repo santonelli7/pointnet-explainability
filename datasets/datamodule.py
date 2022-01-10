@@ -69,11 +69,11 @@ class LitDataModule(pl.LightningDataModule):
             self.train = dataset(root_dir=self.data_dir,
                                     classes=self.config['classes'])
 
-            test_dataset = dataset(root_dir=self.data_dir, split='test')
+            self.val = dataset(root_dir=self.data_dir, split='test')
             points_test = []
             cls_test = []
             for gt_cls in range(self.config['num_classes']):
-                for points, cls in test_dataset:
+                for points, cls in self.val:
                     if cls == gt_cls:
                         points_test.append(points.numpy())
                         cls_test.append(cls.numpy())
@@ -94,8 +94,8 @@ class LitDataModule(pl.LightningDataModule):
             pin_memory=True,
         )
 
-    # def val_dataloader(self):
-    #     return torch.utils.data.DataLoader(self.val, batch_size=self.args.batch_size)
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(self.val, batch_size=self.config['batch_size']*2)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test, batch_size=self.config['batch_size']*2)

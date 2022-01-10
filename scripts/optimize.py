@@ -74,7 +74,7 @@ def optimization_loop(config, pointnet, generator, code, ground_truth, cls_idx):
         code.grad.data.zero_()
         
         # Logs
-        if it % 10000 == 0:
+        if it % 100 == 0:
             table, probs = get_class_distribution(config, logits.detach())
             wandb.log({'gen_pointcloud': wandb.Object3D(gen_points.detach().cpu().squeeze().numpy().transpose())})
             wandb.log({"class_distribution" : wandb.plot.bar(table, "class", "probability", title="Class Distribution")})
@@ -134,7 +134,7 @@ def main(config):
 
     wandb.init(id=config["run_id"], project=config["project_name"], config=config, resume="allow")
 
-    wandb.run.name = config['expected_class']
+    wandb.run.name = f"{config['expected_class']}_vis"
 
     optimization_loop(config=config, pointnet=comparator, generator=generator, code=code, ground_truth=gt_class, cls_idx=cls_idx)
 

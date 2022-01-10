@@ -14,7 +14,7 @@
     "last_ckpt": null,
     "run_id": null,
     "project_name": "pointnet_explanation",
-    "max_iters": 100000,
+    "max_iters": 10000,
 
     "seed": 7,
     "lr": 1e-2,
