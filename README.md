@@ -1,5 +1,5 @@
 # PointNet Explanation
-Implementation of Input Optimization technique to explain the predictions of PointNet classifier. For a more detailed presentation of the approach, check <a href="https://santonelli7.github.io/projects/PointNetExpl/" target="_blank">this</a> out.
+Implementation of Input Optimization technique to explain the predictions of PointNet classifier. For a more detailed presentation of the approach, check <a href="https://santonelli7.github.io/projects/PointNetExpl" target="_blank">this</a> out.
 
 
 ### Requirements
@@ -15,5 +15,5 @@ Implementation of Input Optimization technique to explain the predictions of Poi
 3. `python -m scripts.optimize -c "settings/opt_hyperparams.json"`
 
 ## Resources
-- [PointNet](https://github.com/fxia22/pointnet.pytorch) implementation
-- [Adversarial Autoencoder](https://github.com/MaciejZamorski/3d-AAE) implementation
+- <a href="https://github.com/fxia22/pointnet.pytorch" target="_blank">PointNet</a> implementation
+- <a href="https://github.com/MaciejZamorski/3d-AAE" target="_blank">Adversarial Autoencoder</a> implementation
