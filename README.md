@@ -1,5 +1,6 @@
 # PointNet Explanation
-Implementation of Input Optimization technique to explain the predictions of PointNet classifier. For a more detailed presentation of the approach, check [this](https://santonelli7.github.io/projects/PointNetExpl/) out.
+Implementation of Input Optimization technique to explain the predictions of PointNet classifier. For a more detailed presentation of the approach, check <a href="https://santonelli7.github.io/projects/PointNetExpl/" target="_blank">this</a> out.
+
 
 ### Requirements
 `pip install -r requirements.txt`
