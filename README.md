@@ -1,5 +1,5 @@
 # PointNet Explanation
-Model-level technique to explain what PointNet, trained on 3D point cloud classification, has learned.
+Implementation of Input Optimization technique to explain the predictions of PointNet classifier. For a more detailed presentation of the approach, check [this](https://santonelli7.github.io/projects/PointNetExpl/) out.
 
 ### Requirements
 `pip install -r requirements.txt`
